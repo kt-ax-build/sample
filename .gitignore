@@ -34,6 +34,9 @@ samplebe/*.db
 samplebe/*.sqlite
 samplebe/*.sqlite3
 samplebe/hackathon.db
+samplebe/hackathon.mv.db
+samplebe/hackathon.trace.db
+samplebe/hackathon.lock.db
 
 # Node.js
 samplefe/node_modules/
