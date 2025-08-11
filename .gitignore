@@ -51,6 +51,24 @@ samplebe/venv/
 samplebe/env/
 samplebe/.env
 samplebe/.venv/
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
 # Logs
 *.log
