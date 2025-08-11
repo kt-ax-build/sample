@@ -1,6 +1,6 @@
 # KT 해커톤 2025 웹 프로젝트
 
-KT 해커톤 2025를 위한 완전한 웹 애플리케이션입니다. React + MUI 프론트엔드와 Spring Boot 백엔드, PostgreSQL 데이터베이스로 구성되어 있습니다.
+KT 해커톤 2025를 위한 완전한 웹 애플리케이션입니다. React + MUI 프론트엔드와 Spring Boot 백엔드, H2 데이터베이스로 구성되어 있습니다.
 
 ## 🚀 프로젝트 개요
 
@@ -23,17 +23,18 @@ KT 해커톤 2025를 위한 완전한 웹 애플리케이션입니다. React + M
 - **Java 17**
 - **Spring Boot 3.2.0**
 - **Spring Data JPA**
-- **PostgreSQL 15**
+- **H2 Database**
 
 ### 데이터베이스
-- **PostgreSQL 15** (Docker)
-- **pgAdmin 4** (Docker)
+- **H2 Database** (파일 기반, 내장형)
+- **H2 Console** (웹 기반 데이터베이스 관리 도구)
 
 ## 📁 프로젝트 구조
 
 ```
 sample/
-├── docker-compose.yml          # PostgreSQL & pgAdmin 설정
+├── start.sh                    # 전체 서비스 시작 스크립트
+├── .gitignore                  # Git 제외 파일 설정
 ├── samplebe/                   # Spring Boot 백엔드
 │   ├── src/main/java/com/kt/hackathon/
 │   │   ├── controller/         # REST API 컨트롤러
@@ -43,6 +44,7 @@ sample/
 │   │   └── dto/              # 데이터 전송 객체
 │   ├── src/main/resources/
 │   │   └── application.yml   # 애플리케이션 설정
+│   ├── hackathon.mv.db       # H2 데이터베이스 파일
 │   └── pom.xml               # Maven 의존성
 └── samplefe/                  # React 프론트엔드
     ├── src/
@@ -57,14 +59,16 @@ sample/
 
 ## 🚀 시작하기
 
-### 1. 데이터베이스 실행
+### 방법 1: 전체 서비스 한 번에 시작 (권장)
 
 ```bash
-# PostgreSQL과 pgAdmin 컨테이너 실행
-docker-compose up -d
+# 전체 서비스 시작 스크립트 실행
+./start.sh
 ```
 
-### 2. 백엔드 실행
+### 방법 2: 개별 서비스 시작
+
+#### 1. 백엔드 실행
 
 ```bash
 # 백엔드 디렉토리로 이동
@@ -76,7 +80,7 @@ cd samplebe
 
 백엔드는 `http://localhost:8080`에서 실행됩니다.
 
-### 3. 프론트엔드 실행
+#### 2. 프론트엔드 실행
 
 ```bash
 # 프론트엔드 디렉토리로 이동
@@ -125,17 +129,25 @@ npm start
 
 ## 🗄 데이터베이스
 
-### PostgreSQL 접속 정보
-- **호스트**: localhost
-- **포트**: 5432
-- **데이터베이스**: kt_hackathon
-- **사용자**: hackathon_user
-- **비밀번호**: hackathon123!
+### H2 Database 접속 정보
+- **JDBC URL**: `jdbc:h2:file:./hackathon`
+- **사용자**: `sa`
+- **비밀번호**: (빈 값)
+- **파일 위치**: `samplebe/hackathon.mv.db`
 
-### pgAdmin 접속 정보
-- **URL**: http://localhost:5050
-- **이메일**: admin@kt.com
-- **비밀번호**: admin123!
+### H2 Console 접속 정보
+- **URL**: http://localhost:8080/h2-console
+- **JDBC URL**: `jdbc:h2:file:./hackathon`
+- **사용자**: `sa`
+- **비밀번호**: (빈 값)
+
+## 🎯 H2 Database의 장점
+
+- **설치 불필요**: 별도 데이터베이스 서버 설치 불필요
+- **파일 기반**: 애플리케이션과 함께 데이터베이스 파일 생성
+- **웹 콘솔**: 브라우저에서 데이터베이스 관리 가능
+- **개발용 최적화**: 빠른 시작과 테스트에 적합
+- **Docker 불필요**: 컨테이너 없이도 바로 사용 가능
 
 ## 📱 반응형 디자인
 
@@ -154,6 +166,17 @@ npm start
 - **입력 검증**: 프론트엔드 및 백엔드 양쪽에서 데이터 검증
 - **CORS 설정**: 프론트엔드와 백엔드 간 안전한 통신
 - **SQL 인젝션 방지**: JPA를 통한 안전한 데이터베이스 접근
+
+## 🛠 개발 환경 설정
+
+### 필수 요구사항
+- **Java 17** 이상
+- **Node.js 16** 이상
+- **Maven 3.6** 이상
+
+### 권장 개발 도구
+- **IntelliJ IDEA** 또는 **VS Code**
+- **Postman** 또는 **Insomnia** (API 테스트)
 
 ## 📞 문의처
 
