@@ -1,235 +1,191 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
 
-REM 에러 처리 함수
-:error_exit
-echo [ERROR] 오류: %~1
+rem =========================
+rem 출력 설정
+rem =========================
+set "USE_COLOR=0"   rem 0=단색(권장), 1=색상(PowerShell Write-Host)
+set "USE_EMOJI=0"   rem 0=이모지 안씀, 1=이모지 시도(UTF-8 + 지원 폰트 필요)
+set "PS=powershell -NoProfile -ExecutionPolicy Bypass -Command"
+
+:mk_prefix
+set "P_INFO=[INFO]"
+set "P_OK=[ OK ]"
+set "P_WARN=[WARN]"
+set "P_ERR=[ERR ]"
+if "%USE_EMOJI%"=="1" (
+  set "P_INFO=ℹ️ [INFO]"
+  set "P_OK=✅ [ OK ]"
+  set "P_WARN=⚠️ [WARN]"
+  set "P_ERR=❌ [ERR ]"
+)
+exit /b
+
+call :mk_prefix
+
+:echo_info
+if "%USE_COLOR%"=="1" (%PS% "Write-Host '%P_INFO% ' -NoNewline -ForegroundColor Cyan; Write-Host ($args -join ' ')" %* & exit /b)
+echo %P_INFO% %*
+exit /b
+
+:echo_ok
+if "%USE_COLOR%"=="1" (%PS% "Write-Host '%P_OK%  ' -NoNewline -ForegroundColor Green; Write-Host ($args -join ' ')" %* & exit /b)
+echo %P_OK%  %*
+exit /b
+
+:echo_warn
+if "%USE_COLOR%"=="1" (%PS% "Write-Host '%P_WARN% ' -NoNewline -ForegroundColor Yellow; Write-Host ($args -join ' ')" %* & exit /b)
+echo %P_WARN% %*
+exit /b
+
+:echo_err
+if "%USE_COLOR%"=="1" (%PS% "Write-Host '%P_ERR%  ' -NoNewline -ForegroundColor Red; Write-Host ($args -join ' ')" %* 1>&2 & exit /b)
+>&2 echo %P_ERR%  %*
+exit /b
+
+:die
+call :echo_err %*
 exit /b 1
 
-REM 성공 메시지 함수
-:success_msg
-echo [SUCCESS] %~1
-goto :eof
 
-REM 정보 메시지 함수
-:info_msg
-echo [INFO] %~1
-goto :eof
-
-REM 경고 메시지 함수
-:warning_msg
-echo [WARNING] %~1
-goto :eof
-
-echo [INFO] KT 해커톤 2025 웹 프로젝트 시작하기
+rem =========================
+rem 헤더
+rem =========================
+%PS% "$host.UI.RawUI.WindowTitle='KT 해커톤 2025 웹 프로젝트 시작기'"
+call :echo_info "🚀 KT 해커톤 2025 웹 프로젝트 시작하기"
 echo ==================================
 
-REM 필수 도구 확인
-call :info_msg "필수 도구 확인 중..."
 
-REM Java 확인
-java -version >nul 2>&1
-if errorlevel 1 (
-    call :error_exit "Java가 설치되지 않았습니다."
-)
+rem =========================
+rem 필수 도구 확인
+rem =========================
+call :echo_info "필수 도구 확인 중..."
 
-for /f "tokens=3" %%i in ('java -version 2^>^&1 ^| findstr /i "version"') do (
-    set "JAVA_VERSION=%%i"
-    set "JAVA_VERSION=!JAVA_VERSION:"=!"
-    for /f "tokens=1 delims=." %%j in ("!JAVA_VERSION!") do set "JAVA_MAJOR=%%j"
-)
+where java >NUL 2>&1 || call :die "Java가 설치되지 않았습니다."
+for /f "usebackq tokens=* delims=" %%v in (`powershell -NoProfile -Command "(java -version) 2>&1 | Select-String -Pattern '""(\d+)\.' | ForEach-Object { if($_.Matches.Count -gt 0){$_.Matches[0].Groups[1].Value} }"`) do set "JAVA_MAJOR=%%v"
+if "%JAVA_MAJOR%"=="" call :die "Java 버전을 확인할 수 없습니다."
+if %JAVA_MAJOR% LSS 17 call :die "Java 17 이상이 필요합니다. 현재 주요 버전: %JAVA_MAJOR%"
+for /f "usebackq tokens=* delims=" %%l in (`powershell -NoProfile -Command "(java -version) 2>&1 | Select-Object -First 1"`) do set "JAVA_LINE=%%l"
+call :echo_ok "Java 버전 확인 완료: %JAVA_LINE%"
 
-if !JAVA_MAJOR! lss 17 (
-    call :error_exit "Java 17 이상이 필요합니다. 현재 버전: !JAVA_MAJOR!"
-)
-for /f "tokens=*" %%i in ('java -version 2^>^&1 ^| findstr /i "version"') do (
-    call :success_msg "Java 버전 확인 완료: %%i"
-)
+where gradle >NUL 2>&1 ^
+  && for /f "usebackq tokens=* delims=" %%g in (`gradle --version ^| findstr /r /c:"Gradle "`) do call :echo_ok "Gradle 확인 완료: %%g" ^
+  || call :echo_info "시스템 Gradle이 없습니다. Gradle Wrapper를 사용합니다."
 
-REM Gradle 확인 (Gradle Wrapper 사용 시 불필요하지만 확인)
-gradle --version >nul 2>&1
-if errorlevel 1 (
-    call :info_msg "시스템 Gradle이 없습니다. Gradle Wrapper를 사용합니다."
-) else (
-    for /f "tokens=*" %%i in ('gradle --version ^| findstr /i "gradle"') do (
-        call :success_msg "Gradle 확인 완료: %%i"
-    )
-)
+where node >NUL 2>&1 || call :die "Node.js가 설치되지 않았습니다."
+for /f "usebackq tokens=* delims=" %%n in (`node --version`) do call :echo_ok "Node.js 확인 완료: %%n"
 
-REM Node.js 확인
-node --version >nul 2>&1
-if errorlevel 1 (
-    call :error_exit "Node.js가 설치되지 않았습니다."
-)
-for /f "tokens=*" %%i in ('node --version') do (
-    call :success_msg "Node.js 확인 완료: %%i"
-)
-
-REM npm 확인
-npm --version >nul 2>&1
-if errorlevel 1 (
-    call :error_exit "npm이 설치되지 않았습니다."
-)
-for /f "tokens=*" %%i in ('npm --version') do (
-    call :success_msg "npm 확인 완료: %%i"
-)
+where npm >NUL 2>&1 || call :die "npm이 설치되지 않았습니다."
+for /f "usebackq tokens=* delims=" %%m in (`npm --version`) do call :echo_ok "npm 확인 완료: %%m"
 
 echo.
 
-REM 백엔드 시작
-call :info_msg "Spring Boot 백엔드 시작 중..."
-cd samplebe
-if errorlevel 1 (
-    call :error_exit "samplebe 디렉토리를 찾을 수 없습니다."
-)
 
-REM Gradle 의존성 다운로드 (필요한 경우)
+rem =========================
+rem 백엔드 시작
+rem =========================
+call :echo_info "Spring Boot 백엔드 시작 중..."
+if not exist "samplebe" call :die "samplebe 디렉토리를 찾을 수 없습니다."
+pushd samplebe
+
 if not exist "build" (
-    call :info_msg "Gradle 의존성 다운로드 중..."
-    call gradlew.bat build -q
-    if errorlevel 1 (
-        call :error_exit "Gradle 의존성 다운로드 실패"
-    )
+  call :echo_info "Gradle 의존성 다운로드/빌드 중..."
+  call .\gradlew build -q || (popd & call :die "Gradle 빌드 실패")
 )
 
-REM 백엔드 실행
-start /b gradlew.bat bootRun -q
-set "BACKEND_PID=%ERRORLEVEL%"
-cd ..
+%PS% "$p = Start-Process -FilePath '.\gradlew' -ArgumentList @('bootRun','-q') -WorkingDirectory (Get-Location) -PassThru; [IO.File]::WriteAllText('..\BACKEND_PID.txt', $p.Id)"
+if errorlevel 1 (popd & call :die "백엔드 실행 실패")
+popd
 
-REM 백엔드 시작 대기 및 상태 확인
-call :info_msg "백엔드 시작 대기 중..."
-timeout /t 5 /nobreak >nul
+call :echo_info "백엔드 시작 대기 중..."
+timeout /t 5 >NUL
 
-REM 백엔드 상태 확인 (최대 30초 대기)
-set "BACKEND_STARTED=false"
+set "HEALTH_OK=0"
 for /l %%i in (1,1,30) do (
-    powershell -Command "try { Invoke-WebRequest -Uri 'http://localhost:8080/actuator/health' -UseBasicParsing -TimeoutSec 1 | Out-Null; exit 0 } catch { exit 1 }" >nul 2>&1
-    if not errorlevel 1 (
-        call :success_msg "백엔드가 성공적으로 시작되었습니다!"
-        set "BACKEND_STARTED=true"
-        goto :backend_check_done
-    )
-    powershell -Command "try { Invoke-WebRequest -Uri 'http://localhost:8080' -UseBasicParsing -TimeoutSec 1 | Out-Null; exit 0 } catch { exit 1 }" >nul 2>&1
-    if not errorlevel 1 (
-        call :success_msg "백엔드가 성공적으로 시작되었습니다!"
-        set "BACKEND_STARTED=true"
-        goto :backend_check_done
-    )
-    if %%i equ 30 (
-        call :warning_msg "백엔드 시작 시간이 초과되었습니다. 계속 진행합니다..."
-    ) else (
-        <nul set /p=.
-        timeout /t 1 /nobreak >nul
-    )
+  curl -s http://localhost:8080/actuator/health >NUL 2>&1 && set "HEALTH_OK=1" && goto :backend_ok
+  curl -s http://localhost:8080 >NUL 2>&1 && set "HEALTH_OK=1" && goto :backend_ok
+  if "%%i"=="30" (
+    call :echo_warn "백엔드 시작 시간이 초과되었습니다. 계속 진행합니다..."
+  ) else (
+    <NUL set /p .=.
+    timeout /t 1 >NUL
+  )
 )
-:backend_check_done
-
+:backend_ok
+if "%HEALTH_OK%"=="1" call :echo_ok "백엔드가 성공적으로 시작되었습니다!"
 echo.
 
-REM 프론트엔드 시작
-call :info_msg "React 프론트엔드 시작 중..."
-cd samplefe
-if errorlevel 1 (
-    call :error_exit "samplefe 디렉토리를 찾을 수 없습니다."
-)
 
-REM npm 의존성 설치 (필요한 경우)
+rem =========================
+rem 프론트엔드 시작
+rem =========================
+call :echo_info "React 프론트엔드 시작 중..."
+if not exist "samplefe" call :die "samplefe 디렉토리를 찾을 수 없습니다."
+pushd samplefe
+
 if not exist "node_modules" (
-    call :info_msg "npm 의존성 설치 중..."
-    call npm install --silent
-    if errorlevel 1 (
-        call :error_exit "npm 의존성 설치 실패"
-    )
+  call :echo_info "npm 의존성 설치 중..."
+  call npm install --silent || (popd & call :die "npm 의존성 설치 실패")
 )
 
-REM 프론트엔드 실행
-start /b npm start --silent
-set "FRONTEND_PID=%ERRORLEVEL%"
-cd ..
+%PS% "$p = Start-Process -FilePath 'npm' -ArgumentList @('start','--silent') -WorkingDirectory (Get-Location) -PassThru; [IO.File]::WriteAllText('..\FRONTEND_PID.txt', $p.Id)"
+if errorlevel 1 (popd & call :die "프론트엔드 실행 실패")
+popd
 
-REM 프론트엔드 시작 대기
-call :info_msg "프론트엔드 시작 대기 중..."
-timeout /t 10 /nobreak >nul
+call :echo_info "프론트엔드 시작 대기 중..."
+timeout /t 10 >NUL
 
-REM 프론트엔드 상태 확인
-set "FRONTEND_STARTED=false"
+set "FE_OK=0"
 for /l %%i in (1,1,20) do (
-    powershell -Command "try { Invoke-WebRequest -Uri 'http://localhost:3000' -UseBasicParsing -TimeoutSec 1 | Out-Null; exit 0 } catch { exit 1 }" >nul 2>&1
-    if not errorlevel 1 (
-        call :success_msg "프론트엔드가 성공적으로 시작되었습니다!"
-        set "FRONTEND_STARTED=true"
-        goto :frontend_check_done
-    )
-    if %%i equ 20 (
-        call :warning_msg "프론트엔드 시작 시간이 초과되었습니다. 계속 진행합니다..."
-    ) else (
-        <nul set /p=.
-        timeout /t 1 /nobreak >nul
-    )
+  curl -s http://localhost:3000 >NUL 2>&1 && set "FE_OK=1" && goto :frontend_ok
+  if "%%i"=="20" (
+    call :echo_warn "프론트엔드 시작 시간이 초과되었습니다. 계속 진행합니다..."
+  ) else (
+    <NUL set /p .=.
+    timeout /t 1 >NUL
+  )
 )
-:frontend_check_done
+:frontend_ok
+if "%FE_OK%"=="1" call :echo_ok "프론트엔드가 성공적으로 시작되었습니다!"
 
 echo.
-echo [SUCCESS] 모든 서비스가 시작되었습니다!
+call :echo_ok "모든 서비스가 시작되었습니다!"
 echo.
-echo [INFO] 접속 정보:
-echo    프론트엔드: http://localhost:3000
-echo    백엔드 API: http://localhost:8080
-echo    H2 콘솔: http://localhost:8080/h2-console
+echo 프론트엔드: http://localhost:3000
+echo 백엔드 API: http://localhost:8080
+echo H2 콘솔  : http://localhost:8080/h2-console
+echo JDBC URL : jdbc:h2:file:./hackathon
+echo 사용자   : sa
+echo 비밀번호 : (빈 값)
 echo.
-echo [INFO] H2 데이터베이스 정보:
-echo    JDBC URL: jdbc:h2:file:./hackathon
-echo    사용자: sa
-echo    비밀번호: (빈 값)
+call :echo_warn "서비스 중지하려면 아무 키나 누르세요"
+
+for /f "usebackq tokens=* delims=" %%p in (`type BACKEND_PID.txt 2^>NUL`) do set "BACKEND_PID=%%p"
+for /f "usebackq tokens=* delims=" %%p in (`type FRONTEND_PID.txt 2^>NUL`) do set "FRONTEND_PID=%%p"
+
+pause >NUL
+
+rem =========================
+rem 종료 처리
+rem =========================
 echo.
-echo [WARNING] 서비스 중지하려면 Ctrl+C를 누르세요
+call :echo_warn "서비스 중지 중..."
 
-REM 프로세스 상태 모니터링
-:monitor_loop
-timeout /t 5 /nobreak >nul
-
-REM 백엔드 프로세스 확인
-tasklist /FI "IMAGENAME eq java.exe" /FI "WINDOWTITLE eq *gradle*" >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] 백엔드 프로세스가 종료되었습니다.
-    goto :cleanup
+if defined BACKEND_PID (
+  taskkill /PID %BACKEND_PID% /T /F >NUL 2>&1
+  call :echo_info "백엔드 프로세스 종료됨"
 )
 
-REM 프론트엔드 프로세스 확인
-tasklist /FI "IMAGENAME eq node.exe" >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] 프론트엔드 프로세스가 종료되었습니다.
-    goto :cleanup
+if defined FRONTEND_PID (
+  taskkill /PID %FRONTEND_PID% /T /F >NUL 2>&1
+  call :echo_info "프론트엔드 프로세스 종료됨"
 )
 
-goto :monitor_loop
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r ":8080 .*LISTENING"') do taskkill /PID %%p /F >NUL 2>&1
+for /f "tokens=5" %%p in ('netstat -ano ^| findstr /r ":3000 .*LISTENING"') do taskkill /PID %%p /F >NUL 2>&1
 
-REM 종료 시 정리 함수
-:cleanup
-echo.
-echo [WARNING] 서비스 중지 중...
+del /q BACKEND_PID.txt 2>NUL
+del /q FRONTEND_PID.txt 2>NUL
 
-REM 백엔드 프로세스 종료
-taskkill /F /IM java.exe /FI "WINDOWTITLE eq *gradle*" >nul 2>&1
-if not errorlevel 1 (
-    echo [INFO] 백엔드 프로세스 종료됨
-)
-
-REM 프론트엔드 프로세스 종료
-taskkill /F /IM node.exe >nul 2>&1
-if not errorlevel 1 (
-    echo [INFO] 프론트엔드 프로세스 종료됨
-)
-
-REM 포트 정리
-for /f "tokens=5" %%i in ('netstat -ano ^| findstr :8080') do (
-    taskkill /F /PID %%i >nul 2>&1
-)
-for /f "tokens=5" %%i in ('netstat -ano ^| findstr :3000') do (
-    taskkill /F /PID %%i >nul 2>&1
-)
-
-echo [SUCCESS] 모든 서비스가 정상적으로 종료되었습니다.
-pause
+call :echo_ok "모든 서비스가 정상적으로 종료되었습니다."
 exit /b 0
