@@ -1,26 +1,39 @@
 # start.ps1
 # PowerShell 5.1+ 권장. Cursor 하단 PowerShell 터미널에서 실행:  .\start.ps1
-# 실행 정책 오류 시, 현재 세션에서만 우회:  Set-ExecutionPolicy -Scope Process Bypass
+# 정책 오류 시: Set-ExecutionPolicy -Scope Process Bypass
 
 $ErrorActionPreference = 'Stop'
 
-# ===== 출력 유틸(ASCII 전용) =====
+# ========== 출력 유틸(ASCII 태그) ==========
 function W-Info([string]$msg){ Write-Host ("[INFO] {0}" -f $msg) -ForegroundColor Cyan }
 function W-Ok  ([string]$msg){ Write-Host ("[ OK ] {0}" -f $msg) -ForegroundColor Green }
 function W-Warn([string]$msg){ Write-Host ("[WARN] {0}" -f $msg) -ForegroundColor Yellow }
 function W-Err ([string]$msg){ Write-Host ("[ERR ] {0}" -f $msg) -ForegroundColor Red }
 
-# ===== 헤더 =====
+# ========== HTTP 헬퍼(버전 무관 타임아웃) ==========
+function Test-HttpOk([string]$url, [int]$timeoutMs = 1000) {
+  try {
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $client  = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromMilliseconds($timeoutMs)
+    $resp = $client.GetAsync($url).GetAwaiter().GetResult()
+    return $resp.IsSuccessStatusCode
+  } catch { return $false } finally {
+    if ($client) { $client.Dispose() }
+    if ($handler) { $handler.Dispose() }
+  }
+}
+
+# ========== 헤더/경로 ==========
 try { $Host.UI.RawUI.WindowTitle = "KT 해커톤 2025 - Start" } catch {}
 W-Info "KT 해커톤 2025 웹 프로젝트 시작"
 "=================================="
 
-# ===== 경로 =====
 $Root  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BeDir = Join-Path $Root 'samplebe'
 $FeDir = Join-Path $Root 'samplefe'
 
-# ===== 필수 도구 확인 =====
+# ========== 필수 도구 확인 ==========
 W-Info "필수 도구 확인 중..."
 
 # Java
@@ -42,88 +55,83 @@ if (Get-Command gradle -ErrorAction SilentlyContinue) {
 # Node / npm
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { W-Err "Node.js가 설치되지 않았습니다."; exit 1 }
 W-Ok ("Node 확인: {0}" -f (& node --version))
-
-if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { W-Err "npm이 설치되지 않았습니다."; exit 1 }
+if (-not (Get-Command npm  -ErrorAction SilentlyContinue)) { W-Err "npm이 설치되지 않았습니다."; exit 1 }
 W-Ok ("npm 확인: {0}" -f (& npm --version))
 ""
 
-# ===== 백엔드 시작 =====
-if (-not (Test-Path $BeDir)) { W-Err ("samplebe 디렉토리를 찾을 수 없습니다. ({0})" -f $BeDir); exit 1 }
-W-Info "Spring Boot 백엔드 시작 중..."
-Push-Location $BeDir
-try {
-  if (-not (Test-Path 'build')) {
-    W-Info "Gradle 빌드/의존성 다운로드..."
-    & .\gradlew build -q
-  }
-  $be = Start-Process -FilePath ".\gradlew" -ArgumentList @('bootRun','-q') -PassThru
-} catch {
-  Pop-Location
-  W-Err ("백엔드 실행 실패: {0}" -f $_.Exception.Message)
-  exit 1
-}
-Pop-Location
+# ========== 실행(백엔드 → 프론트엔드) ==========
+$be = $null
+$fe = $null
 
-W-Info "백엔드 상태 확인 중..."
-Start-Sleep -Seconds 3
-$beUp = $false
-foreach ($i in 1..30) {
+try {
+  # --- 백엔드 ---
+  if (-not (Test-Path $BeDir)) { W-Err ("samplebe 디렉토리를 찾을 수 없습니다. ({0})" -f $BeDir); exit 1 }
+  W-Info "Spring Boot 백엔드 시작 중..."
+  Push-Location $BeDir
   try {
-    Invoke-WebRequest -Uri "http://localhost:8080/actuator/health" -TimeoutSec 1 | Out-Null
-    $beUp = $true; break
+    if (-not (Test-Path 'build')) {
+      W-Info "Gradle 빌드/의존성 다운로드..."
+      & .\gradlew build -q
+    }
+    $be = Start-Process -FilePath ".\gradlew" -ArgumentList @('bootRun','-q') -PassThru
   } catch {
-    try {
-      Invoke-WebRequest -Uri "http://localhost:8080" -TimeoutSec 1 | Out-Null
-      $beUp = $true; break
-    } catch { Start-Sleep -Milliseconds 800 }
+    throw "백엔드 실행 실패: $($_.Exception.Message)"
+  } finally {
+    Pop-Location
   }
-}
-if ($beUp) { W-Ok "백엔드 기동 완료" } else { W-Warn "백엔드 확인 타임아웃(계속 진행)" }
-""
 
-# ===== 프론트엔드 시작 =====
-if (-not (Test-Path $FeDir)) { W-Err ("samplefe 디렉토리를 찾을 수 없습니다. ({0})" -f $FeDir); exit 1 }
-W-Info "React 프론트엔드 시작 중..."
-Push-Location $FeDir
-try {
-  if (-not (Test-Path 'node_modules')) {
-    W-Info "npm install..."
-    & npm install --silent
+  W-Info "백엔드 상태 확인 중..."
+  Start-Sleep -Seconds 3
+  $beUp = $false
+  foreach ($i in 1..30) {
+    if ( Test-HttpOk "http://localhost:8080/actuator/health" -timeoutMs 1000 `
+      -or Test-HttpOk "http://localhost:8080" -timeoutMs 1000) { $beUp = $true; break }
+    Start-Sleep -Milliseconds 800
   }
-  # CRA 자동 브라우저 오픈 방지
-  $env:BROWSER = 'none'
-  $fe = Start-Process -FilePath "npm" -ArgumentList @('start','--silent') -PassThru
-} catch {
-  Pop-Location
-  W-Err ("프론트엔드 실행 실패: {0}" -f $_.Exception.Message)
-  exit 1
-}
-Pop-Location
+  if ($beUp) { W-Ok "백엔드 기동 완료" } else { W-Warn "백엔드 확인 타임아웃(계속 진행)" }
+  ""
 
-W-Info "프론트엔드 상태 확인 중..."
-Start-Sleep -Seconds 5
-$feUp = $false
-foreach ($i in 1..20) {
+  # --- 프론트엔드 ---
+  if (-not (Test-Path $FeDir)) { W-Err ("samplefe 디렉토리를 찾을 수 없습니다. ({0})" -f $FeDir); exit 1 }
+  W-Info "React 프론트엔드 시작 중..."
+  Push-Location $FeDir
   try {
-    Invoke-WebRequest -Uri "http://localhost:3000" -TimeoutSec 1 | Out-Null
-    $feUp = $true; break
-  } catch { Start-Sleep -Milliseconds 800 }
-}
-if ($feUp) { W-Ok "프론트엔드 기동 완료" } else { W-Warn "프론트엔드 확인 타임아웃(계속 진행)" }
+    if (-not (Test-Path 'node_modules')) {
+      W-Info "npm install..."
+      & npm install --silent
+    }
+    $env:BROWSER = 'none'   # CRA 자동 브라우저 오픈 방지
+    $fe = Start-Process -FilePath "npm" -ArgumentList @('start','--silent') -PassThru
+  } catch {
+    throw "프론트엔드 실행 실패: $($_.Exception.Message)"
+  } finally {
+    Pop-Location
+  }
 
-""
-W-Ok "모든 서비스 시작 완료"
-"프론트엔드: http://localhost:3000"
-"백엔드 API: http://localhost:8080"
-"H2 콘솔  : http://localhost:8080/h2-console"
-"JDBC URL : jdbc:h2:file:./hackathon  (user: sa, pwd: empty)"
-""
+  W-Info "프론트엔드 상태 확인 중..."
+  Start-Sleep -Seconds 5
+  $feUp = $false
+  foreach ($i in 1..20) {
+    if (Test-HttpOk "http://localhost:3000" -timeoutMs 1000) { $feUp = $true; break }
+    Start-Sleep -Milliseconds 800
+  }
+  if ($feUp) { W-Ok "프론트엔드 기동 완료" } else { W-Warn "프론트엔드 확인 타임아웃(계속 진행)" }
 
-# ===== 종료/정리 =====
-try {
+  ""
+  W-Ok "모든 서비스 시작 완료"
+  "프론트엔드: http://localhost:3000"
+  "백엔드 API: http://localhost:8080"
+  "H2 콘솔  : http://localhost:8080/h2-console"
+  "JDBC URL : jdbc:h2:file:./hackathon  (user: sa, pwd: empty)"
+  ""
+
   W-Warn "종료하려면 Enter 키를 누르세요"
   [void][System.Console]::ReadLine()
-} finally {
+}
+catch {
+  W-Err $_
+}
+finally {
   W-Warn "서비스 중지 중..."
 
   if ($be -and -not $be.HasExited) {
