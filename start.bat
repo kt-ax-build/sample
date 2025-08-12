@@ -1,34 +1,27 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM 색상 정의 (Windows 10 이상에서 지원)
-set "RED=[91m"
-set "GREEN=[92m"
-set "YELLOW=[93m"
-set "BLUE=[94m"
-set "NC=[0m"
-
 REM 에러 처리 함수
 :error_exit
-echo %RED%❌ 오류: %~1%NC%
+echo [ERROR] ❌ 오류: %~1
 exit /b 1
 
 REM 성공 메시지 함수
 :success_msg
-echo %GREEN%✅ %~1%NC%
+echo [SUCCESS] ✅ %~1
 goto :eof
 
 REM 정보 메시지 함수
 :info_msg
-echo %BLUE%ℹ️  %~1%NC%
+echo [INFO] ℹ️  %~1
 goto :eof
 
 REM 경고 메시지 함수
 :warning_msg
-echo %YELLOW%⚠️  %~1%NC%
+echo [WARNING] ⚠️  %~1
 goto :eof
 
-echo %BLUE%🚀 KT 해커톤 2025 웹 프로젝트 시작하기%NC%
+echo [INFO] 🚀 KT 해커톤 2025 웹 프로젝트 시작하기
 echo ==================================
 
 REM 필수 도구 확인
@@ -178,19 +171,19 @@ for /l %%i in (1,1,20) do (
 :frontend_check_done
 
 echo.
-echo %GREEN%✅ 모든 서비스가 시작되었습니다!%NC%
+echo [SUCCESS] ✅ 모든 서비스가 시작되었습니다!
 echo.
-echo %BLUE%🌐 접속 정보:%NC%
+echo [INFO] 🌐 접속 정보:
 echo    프론트엔드: http://localhost:3000
 echo    백엔드 API: http://localhost:8080
 echo    H2 콘솔: http://localhost:8080/h2-console
 echo.
-echo %BLUE%📊 H2 데이터베이스 정보:%NC%
+echo [INFO] 📊 H2 데이터베이스 정보:
 echo    JDBC URL: jdbc:h2:file:./hackathon
 echo    사용자: sa
 echo    비밀번호: (빈 값)
 echo.
-echo %YELLOW%🛑 서비스 중지하려면 Ctrl+C를 누르세요%NC%
+echo [WARNING] 🛑 서비스 중지하려면 Ctrl+C를 누르세요
 
 REM 프로세스 상태 모니터링
 :monitor_loop
@@ -199,14 +192,14 @@ timeout /t 5 /nobreak >nul
 REM 백엔드 프로세스 확인
 tasklist /FI "IMAGENAME eq java.exe" /FI "WINDOWTITLE eq *gradle*" >nul 2>&1
 if errorlevel 1 (
-    echo %RED%❌ 백엔드 프로세스가 종료되었습니다.%NC%
+    echo [ERROR] ❌ 백엔드 프로세스가 종료되었습니다.
     goto :cleanup
 )
 
 REM 프론트엔드 프로세스 확인
 tasklist /FI "IMAGENAME eq node.exe" >nul 2>&1
 if errorlevel 1 (
-    echo %RED%❌ 프론트엔드 프로세스가 종료되었습니다.%NC%
+    echo [ERROR] ❌ 프론트엔드 프로세스가 종료되었습니다.
     goto :cleanup
 )
 
@@ -215,18 +208,18 @@ goto :monitor_loop
 REM 종료 시 정리 함수
 :cleanup
 echo.
-echo %YELLOW%🛑 서비스 중지 중...%NC%
+echo [WARNING] 🛑 서비스 중지 중...
 
 REM 백엔드 프로세스 종료
 taskkill /F /IM java.exe /FI "WINDOWTITLE eq *gradle*" >nul 2>&1
 if not errorlevel 1 (
-    echo %BLUE%백엔드 프로세스 종료됨%NC%
+    echo [INFO] 백엔드 프로세스 종료됨
 )
 
 REM 프론트엔드 프로세스 종료
 taskkill /F /IM node.exe >nul 2>&1
 if not errorlevel 1 (
-    echo %BLUE%프론트엔드 프로세스 종료됨%NC%
+    echo [INFO] 프론트엔드 프로세스 종료됨
 )
 
 REM 포트 정리
@@ -237,6 +230,6 @@ for /f "tokens=5" %%i in ('netstat -ano ^| findstr :3000') do (
     taskkill /F /PID %%i >nul 2>&1
 )
 
-echo %GREEN%✅ 모든 서비스가 정상적으로 종료되었습니다.%NC%
+echo [SUCCESS] ✅ 모든 서비스가 정상적으로 종료되었습니다.
 pause
 exit /b 0
