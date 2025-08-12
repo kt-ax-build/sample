@@ -24,6 +24,7 @@ KT 해커톤 2025를 위한 완전한 웹 애플리케이션입니다. React + M
 - **Spring Boot 3.2.0**
 - **Spring Data JPA**
 - **H2 Database**
+- **Gradle 8.5**
 
 ### 데이터베이스
 - **H2 Database** (파일 기반, 내장형)
@@ -45,7 +46,11 @@ sample/
 │   ├── src/main/resources/
 │   │   └── application.yml   # 애플리케이션 설정
 │   ├── hackathon.mv.db       # H2 데이터베이스 파일
-│   └── pom.xml               # Maven 의존성
+│   ├── build.gradle          # Gradle 빌드 설정
+│   ├── settings.gradle       # Gradle 프로젝트 설정
+│   ├── gradlew               # Gradle Wrapper (Unix/Linux)
+│   ├── gradlew.bat           # Gradle Wrapper (Windows)
+│   └── gradle/wrapper/       # Gradle Wrapper 파일들
 └── samplefe/                  # React 프론트엔드
     ├── src/
     │   ├── components/        # 재사용 가능한 컴포넌트
@@ -61,21 +66,38 @@ sample/
 
 ### 방법 1: 전체 서비스 한 번에 시작 (권장)
 
+#### macOS/Linux
 ```bash
 # 전체 서비스 시작 스크립트 실행
 ./start.sh
+```
+
+#### Windows
+```cmd
+# 전체 서비스 시작 배치 파일 실행
+start.bat
 ```
 
 ### 방법 2: 개별 서비스 시작
 
 #### 1. 백엔드 실행
 
+##### macOS/Linux
 ```bash
 # 백엔드 디렉토리로 이동
 cd samplebe
 
-# Maven으로 프로젝트 빌드 및 실행
-./mvnw spring-boot:run
+# Gradle로 프로젝트 빌드 및 실행
+./gradlew bootRun
+```
+
+##### Windows
+```cmd
+# 백엔드 디렉토리로 이동
+cd samplebe
+
+# Gradle로 프로젝트 빌드 및 실행
+gradlew.bat bootRun
 ```
 
 백엔드는 `http://localhost:8080`에서 실행됩니다.
@@ -172,7 +194,7 @@ npm start
 ### 필수 요구사항
 - **Java 17** 이상
 - **Node.js 16** 이상
-- **Maven 3.6** 이상
+- **Gradle 8.5** 이상 (또는 Gradle Wrapper 사용)
 
 ### 권장 개발 도구
 - **IntelliJ IDEA** 또는 **VS Code**

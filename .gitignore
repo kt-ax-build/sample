@@ -17,7 +17,7 @@ Thumbs.db
 *.swo
 *~
 
-# Maven
+# Maven (legacy)
 samplebe/target/
 samplebe/pom.xml.tag
 samplebe/pom.xml.releaseBackup
@@ -28,6 +28,16 @@ samplebe/dependency-reduced-pom.xml
 samplebe/buildNumber.properties
 samplebe/.mvn/timing.properties
 samplebe/.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+samplebe/.gradle/
+samplebe/build/
+samplebe/gradle/
+samplebe/gradlew
+samplebe/gradlew.bat
+samplebe/gradle.properties
+samplebe/gradle-wrapper.jar
+samplebe/gradle-wrapper.properties
 
 # Database files
 samplebe/*.db

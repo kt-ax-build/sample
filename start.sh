@@ -45,11 +45,12 @@ if [ "$JAVA_VERSION" -lt 17 ]; then
 fi
 success_msg "Java 버전 확인 완료: $(java -version 2>&1 | head -n 1)"
 
-# Maven 확인
-if ! command -v mvn &> /dev/null; then
-    error_exit "Maven이 설치되지 않았습니다."
+# Gradle 확인 (Gradle Wrapper 사용 시 불필요하지만 확인)
+if command -v gradle &> /dev/null; then
+    success_msg "Gradle 확인 완료: $(gradle --version | head -n 1)"
+else
+    info_msg "시스템 Gradle이 없습니다. Gradle Wrapper를 사용합니다."
 fi
-success_msg "Maven 확인 완료: $(mvn -version | head -n 1)"
 
 # Node.js 확인
 if ! command -v node &> /dev/null; then
@@ -69,14 +70,14 @@ echo ""
 info_msg "Spring Boot 백엔드 시작 중..."
 cd samplebe || error_exit "samplebe 디렉토리를 찾을 수 없습니다."
 
-# Maven 의존성 다운로드 (필요한 경우)
-if [ ! -d "target" ] || [ ! -f "target/classes" ]; then
-    info_msg "Maven 의존성 다운로드 중..."
-    mvn dependency:resolve -q || error_exit "Maven 의존성 다운로드 실패"
+# Gradle 의존성 다운로드 (필요한 경우)
+if [ ! -d "build" ] || [ ! -f "build/classes" ]; then
+    info_msg "Gradle 의존성 다운로드 중..."
+    ./gradlew build -q || error_exit "Gradle 의존성 다운로드 실패"
 fi
 
 # 백엔드 실행
-mvn spring-boot:run -q &
+./gradlew bootRun -q &
 BACKEND_PID=$!
 cd ..
 
