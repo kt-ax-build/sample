@@ -32,12 +32,8 @@ samplebe/.mvn/wrapper/maven-wrapper.jar
 # Gradle
 samplebe/.gradle/
 samplebe/build/
-samplebe/gradle/
-samplebe/gradlew
-samplebe/gradlew.bat
+samplebe/gradle/wrapper/gradle-wrapper.jar
 samplebe/gradle.properties
-samplebe/gradle-wrapper.jar
-samplebe/gradle-wrapper.properties
 
 # Database files
 samplebe/*.db
