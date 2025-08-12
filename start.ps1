@@ -1,157 +1,243 @@
-# start.ps1
-# PowerShell 5.1+ 권장. Cursor 하단 PowerShell 터미널에서 실행:  .\start.ps1
-# 정책 오류 시: Set-ExecutionPolicy -Scope Process Bypass
+#Requires -Version 5.1
 
-$ErrorActionPreference = 'Stop'
+# ==== Options ====
+$UseEmoji = $false   # Set to true for emoji output (requires terminal font/UTF-8 support)
+$OpenBrowser = $false # Set to false to prevent auto-browser opening in CRA
+$ShowMonitoring = $false # Set to true to show continuous service monitoring logs
+$QuietMode = $true   # Set to false to show all startup logs
 
-# ========== 출력 유틸(ASCII 태그) ==========
-function W-Info([string]$msg){ Write-Host ("[INFO] {0}" -f $msg) -ForegroundColor Cyan }
-function W-Ok  ([string]$msg){ Write-Host ("[ OK ] {0}" -f $msg) -ForegroundColor Green }
-function W-Warn([string]$msg){ Write-Host ("[WARN] {0}" -f $msg) -ForegroundColor Yellow }
-function W-Err ([string]$msg){ Write-Host ("[ERR ] {0}" -f $msg) -ForegroundColor Red }
-
-# ========== HTTP 헬퍼(버전 무관 타임아웃) ==========
-function Test-HttpOk([string]$url, [int]$timeoutMs = 1000) {
-  try {
-    $handler = New-Object System.Net.Http.HttpClientHandler
-    $client  = New-Object System.Net.Http.HttpClient($handler)
-    $client.Timeout = [TimeSpan]::FromMilliseconds($timeoutMs)
-    $resp = $client.GetAsync($url).GetAwaiter().GetResult()
-    return $resp.IsSuccessStatusCode
-  } catch { return $false } finally {
-    if ($client) { $client.Dispose() }
-    if ($handler) { $handler.Dispose() }
+# ==== Output Utilities ====
+function Out-Line($tag, $msg, $color) {
+  $p = switch ($tag) {
+    'INFO' { if($UseEmoji){'[INFO]'} else {'[INFO]'} }
+    'OK'   { if($UseEmoji){'[ OK ]'} else {'[ OK ]'} }
+    'WARN' { if($UseEmoji){'[WARN]'}  else {'[WARN]'} }
+    'ERR'  { if($UseEmoji){'[ERR ]'} else {'[ERR ]'} }
   }
+  Write-Host ("{0} {1}" -f $p, $msg) -ForegroundColor $color
 }
+function Info($m){ Out-Line INFO $m Cyan }
+function Ok($m){   Out-Line OK   $m Green }
+function Warn($m){ Out-Line WARN $m Yellow }
+function Err($m){  Out-Line ERR  $m Red }
 
-# ========== 헤더/경로 ==========
-try { $Host.UI.RawUI.WindowTitle = "KT 해커톤 2025 - Start" } catch {}
-W-Info "KT 해커톤 2025 웹 프로젝트 시작"
+# ==== Header ====
+$Host.UI.RawUI.WindowTitle = "KT Hackathon 2025 - Start"
+Info "KT Hackathon 2025 Web Project Starting"
 "=================================="
 
-$Root  = Split-Path -Parent $MyInvocation.MyCommand.Path
-$BeDir = Join-Path $Root 'samplebe'
-$FeDir = Join-Path $Root 'samplefe'
-
-# ========== 필수 도구 확인 ==========
-W-Info "필수 도구 확인 중..."
+# ==== Check Required Tools ====
+Info "Checking required tools..."
 
 # Java
-$javaLine = (& java -version 2>&1 | Select-Object -First 1)
-if (-not $javaLine) { W-Err "Java가 설치되지 않았습니다."; exit 1 }
-if ($javaLine -notmatch '\"(\d+)\.') { W-Err "Java 버전을 확인할 수 없습니다. ($javaLine)"; exit 1 }
-$javaMajor = [int]$Matches[1]
-if ($javaMajor -lt 17) { W-Err ("Java 17 이상 필요. 현재: {0}" -f $javaLine); exit 1 }
-W-Ok ("Java 확인: {0}" -f $javaLine)
+try {
+    $javaVersion = java -version 2>&1 | Select-String "version" | Select-Object -First 1
+    if ($javaVersion -match 'version "(\d+)\.') {
+        $javaMajor = [int]$Matches[1]
+        if ($javaMajor -lt 8) { Err "Java 8+ required. Current: $javaVersion"; exit 1 }
+        Ok "Java check: $javaVersion (Major version: $javaMajor)"
+    } else {
+        Ok "Java check: $javaVersion"
+    }
+} catch {
+    Err "Java is not installed or not accessible"; exit 1
+}
 
-# Gradle(옵션)
+# Gradle (optional)
 if (Get-Command gradle -ErrorAction SilentlyContinue) {
   $gradleLine = (& gradle --version | Select-String -Pattern '^Gradle\s+').Line
-  if ($gradleLine) { W-Ok ("Gradle 확인: {0}" -f $gradleLine) } else { W-Info "Gradle CLI 감지됨" }
+  if ($gradleLine) { Ok "Gradle check: $gradleLine" } else { Info "Gradle CLI detected" }
 } else {
-  W-Info "시스템 Gradle 없음 → Gradle Wrapper 사용"
+  Info "System Gradle not found -> Using Gradle Wrapper"
 }
 
 # Node / npm
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) { W-Err "Node.js가 설치되지 않았습니다."; exit 1 }
-W-Ok ("Node 확인: {0}" -f (& node --version))
-if (-not (Get-Command npm  -ErrorAction SilentlyContinue)) { W-Err "npm이 설치되지 않았습니다."; exit 1 }
-W-Ok ("npm 확인: {0}" -f (& npm --version))
+if (Get-Command node -ErrorAction SilentlyContinue) {
+    Ok ("Node check: " + (& node --version))
+} else {
+    Err "Node.js is not installed."; exit 1
+}
+
+if (Get-Command npm -ErrorAction SilentlyContinue) {
+    Ok ("npm check: " + (& npm --version))
+} else {
+    Err "npm is not installed."; exit 1
+}
 ""
 
-# ========== 실행(백엔드 → 프론트엔드) ==========
-$be = $null
-$fe = $null
+# ==== Start Backend ====
+$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$beDir = Join-Path $root 'samplebe'
+if (-not (Test-Path $beDir)) { Err "samplebe directory not found ($beDir)"; exit 1 }
+
+Info "Starting Spring Boot backend..."
+Push-Location $beDir
+try {
+  if (-not (Test-Path 'build')) {
+    Info "Gradle build/dependency download..."
+    & .\gradlew build -q
+  }
+  Info "Executing: .\gradlew bootRun -q"
+  $be = Start-Job -ScriptBlock { 
+    Set-Location $using:beDir
+    & .\gradlew bootRun -q
+  } -Name "Backend"
+  if ($be) {
+    Info "Backend job started with ID: $($be.Id)"
+  } else {
+    Err "Failed to start backend job"
+    exit 1
+  }
+} catch {
+  Err "Backend execution failed: $($_.Exception.Message)"
+  exit 1
+} finally {
+  Pop-Location
+}
+
+Info "Checking backend status..."
+Start-Sleep -Seconds 3
+$beUp = $false
+foreach ($i in 1..30) {
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:8080/actuator/health" -TimeoutSec 1 | Out-Null
+    $beUp = $true; break
+  } catch {
+    try {
+      Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:8080" -TimeoutSec 1 | Out-Null
+      $beUp = $true; break
+    } catch { Start-Sleep -Milliseconds 800 }
+  }
+}
+if ($beUp) { Ok "Backend startup complete" } else { if (-not $QuietMode) { Warn "Backend check timeout (continuing)" } }
+""
+
+# ==== Start Frontend ====
+$feDir = Join-Path $root 'samplefe'
+if (-not (Test-Path $feDir)) { Err "samplefe directory not found ($feDir)"; exit 1 }
+
+Info "Starting React frontend..."
+Push-Location $feDir
+try {
+  if (-not (Test-Path 'node_modules')) {
+    Info "npm install..."
+    & npm install --silent
+  }
+  if (-not $OpenBrowser) { $env:BROWSER = 'none' }
+  Info "Executing: npm start"
+  $fe = Start-Job -ScriptBlock { 
+    Set-Location $using:feDir
+    & npm start
+  } -Name "Frontend"
+  if ($fe) {
+    Info "Frontend job started with ID: $($fe.Id)"
+  } else {
+    Err "Failed to start frontend job"
+    exit 1
+  }
+} catch {
+  Err "Frontend execution failed: $($_.Exception.Message)"
+  exit 1
+} finally {
+  Pop-Location
+}
+
+Info "Checking frontend status..."
+Start-Sleep -Seconds 5
+$feUp = $false
+foreach ($i in 1..20) {
+  try {
+    Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:3000" -TimeoutSec 1 | Out-Null
+    $feUp = $true; break
+  } catch { Start-Sleep -Milliseconds 800 }
+}
+if ($feUp) { Ok "Frontend startup complete" } else { if (-not $QuietMode) { Warn "Frontend check timeout (continuing)" } }
+
+""
+Ok "All services started successfully"
+"Frontend: http://localhost:3000"
+"Backend API: http://localhost:8080"
+"H2 Console: http://localhost:8080/h2-console"
+"JDBC URL: jdbc:h2:file:./hackathon  (user: sa, pwd: empty)"
+""
+
+# ==== Service Monitoring ====
+Info "Services are running. Press Ctrl+C to stop all services."
+if ($ShowMonitoring) {
+  Info "Monitoring service status..."
+} else {
+  Info "Monitoring disabled. Services running in background."
+}
 
 try {
-  # --- 백엔드 ---
-  if (-not (Test-Path $BeDir)) { W-Err ("samplebe 디렉토리를 찾을 수 없습니다. ({0})" -f $BeDir); exit 1 }
-  W-Info "Spring Boot 백엔드 시작 중..."
-  Push-Location $BeDir
-  try {
-    if (-not (Test-Path 'build')) {
-      W-Info "Gradle 빌드/의존성 다운로드..."
-      & .\gradlew build -q
+  while ($true) {
+    if ($ShowMonitoring) {
+      # Check backend status
+      $beStatus = "Running"
+      try {
+        $beResponse = Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:8080/actuator/health" -TimeoutSec 2 | Out-Null
+        $beStatus = "Healthy"
+      } catch {
+        $beStatus = "Unreachable"
+      }
+      
+      # Check frontend status
+      $feStatus = "Running"
+      try {
+        $feResponse = Invoke-WebRequest -UseBasicParsing -Uri "http://localhost:3000" -TimeoutSec 2 | Out-Null
+        $feStatus = "Healthy"
+      } catch {
+        $feStatus = "Unreachable"
+      }
+      
+      # Display status
+      $timestamp = Get-Date -Format "HH:mm:ss"
+      Write-Host "[$timestamp] Backend: $beStatus | Frontend: $feStatus" -ForegroundColor Cyan
+      
+      # Show recent logs
+      if ($be) {
+        $beLogs = Receive-Job -Id $be.Id -Keep | Select-Object -Last 1
+        if ($beLogs) {
+          Write-Host "  Backend: $beLogs" -ForegroundColor Green
+        }
+      }
+      
+      if ($fe) {
+        $feLogs = Receive-Job -Id $fe.Id -Keep | Select-Object -Last 1
+        if ($feLogs) {
+          Write-Host "  Frontend: $feLogs" -ForegroundColor Yellow
+        }
+      }
+      
+      Start-Sleep -Seconds 5
+    } else {
+      # Silent monitoring - just keep the script running
+      Start-Sleep -Seconds 10
     }
-    $be = Start-Process -FilePath ".\gradlew" -ArgumentList @('bootRun','-q') -PassThru
-  } catch {
-    throw "백엔드 실행 실패: $($_.Exception.Message)"
-  } finally {
-    Pop-Location
   }
+} catch {
+  # Handle Ctrl+C
+  Write-Host ""
+  Warn "Received interrupt signal. Stopping services..."
+} finally {
+  Warn "Stopping services..."
 
-  W-Info "백엔드 상태 확인 중..."
-  Start-Sleep -Seconds 3
-  $beUp = $false
-  foreach ($i in 1..30) {
-    if ( Test-HttpOk "http://localhost:8080/actuator/health" -timeoutMs 1000 `
-      -or Test-HttpOk "http://localhost:8080" -timeoutMs 1000) { $beUp = $true; break }
-    Start-Sleep -Milliseconds 800
+  if ($be) {
+    try { Stop-Job -Id $be.Id -Force -ErrorAction SilentlyContinue } catch {}
+    Info "Backend job stopped"
   }
-  if ($beUp) { W-Ok "백엔드 기동 완료" } else { W-Warn "백엔드 확인 타임아웃(계속 진행)" }
-  ""
-
-  # --- 프론트엔드 ---
-  if (-not (Test-Path $FeDir)) { W-Err ("samplefe 디렉토리를 찾을 수 없습니다. ({0})" -f $FeDir); exit 1 }
-  W-Info "React 프론트엔드 시작 중..."
-  Push-Location $FeDir
-  try {
-    if (-not (Test-Path 'node_modules')) {
-      W-Info "npm install..."
-      & npm install --silent
-    }
-    $env:BROWSER = 'none'   # CRA 자동 브라우저 오픈 방지
-    $fe = Start-Process -FilePath "npm" -ArgumentList @('start','--silent') -PassThru
-  } catch {
-    throw "프론트엔드 실행 실패: $($_.Exception.Message)"
-  } finally {
-    Pop-Location
-  }
-
-  W-Info "프론트엔드 상태 확인 중..."
-  Start-Sleep -Seconds 5
-  $feUp = $false
-  foreach ($i in 1..20) {
-    if (Test-HttpOk "http://localhost:3000" -timeoutMs 1000) { $feUp = $true; break }
-    Start-Sleep -Milliseconds 800
-  }
-  if ($feUp) { W-Ok "프론트엔드 기동 완료" } else { W-Warn "프론트엔드 확인 타임아웃(계속 진행)" }
-
-  ""
-  W-Ok "모든 서비스 시작 완료"
-  "프론트엔드: http://localhost:3000"
-  "백엔드 API: http://localhost:8080"
-  "H2 콘솔  : http://localhost:8080/h2-console"
-  "JDBC URL : jdbc:h2:file:./hackathon  (user: sa, pwd: empty)"
-  ""
-
-  W-Warn "종료하려면 Enter 키를 누르세요"
-  [void][System.Console]::ReadLine()
-}
-catch {
-  W-Err $_
-}
-finally {
-  W-Warn "서비스 중지 중..."
-
-  if ($be -and -not $be.HasExited) {
-    try { Stop-Process -Id $be.Id -Force -ErrorAction SilentlyContinue } catch {}
-    W-Info "백엔드 프로세스 종료"
-  }
-  if ($fe -and -not $fe.HasExited) {
-    try { Stop-Process -Id $fe.Id -Force -ErrorAction SilentlyContinue } catch {}
-    W-Info "프론트엔드 프로세스 종료"
+  if ($fe) {
+    try { Stop-Job -Id $fe.Id -Force -ErrorAction SilentlyContinue } catch {}
+    Info "Frontend job stopped"
   }
 
   foreach ($port in 8080,3000) {
     try {
       $pids = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue |
               Select-Object -ExpandProperty OwningProcess -Unique
-      foreach ($pid in $pids) {
-        try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
-      }
+      foreach ($pid in $pids) { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue }
     } catch {}
   }
 
-  W-Ok "정상 종료"
+  Ok "Normal shutdown"
 }
