@@ -3,25 +3,25 @@ setlocal enabledelayedexpansion
 
 REM 에러 처리 함수
 :error_exit
-echo [ERROR] ❌ 오류: %~1
+echo [ERROR] 오류: %~1
 exit /b 1
 
 REM 성공 메시지 함수
 :success_msg
-echo [SUCCESS] ✅ %~1
+echo [SUCCESS] %~1
 goto :eof
 
 REM 정보 메시지 함수
 :info_msg
-echo [INFO] ℹ️  %~1
+echo [INFO] %~1
 goto :eof
 
 REM 경고 메시지 함수
 :warning_msg
-echo [WARNING] ⚠️  %~1
+echo [WARNING] %~1
 goto :eof
 
-echo [INFO] 🚀 KT 해커톤 2025 웹 프로젝트 시작하기
+echo [INFO] KT 해커톤 2025 웹 프로젝트 시작하기
 echo ==================================
 
 REM 필수 도구 확인
@@ -171,19 +171,19 @@ for /l %%i in (1,1,20) do (
 :frontend_check_done
 
 echo.
-echo [SUCCESS] ✅ 모든 서비스가 시작되었습니다!
+echo [SUCCESS] 모든 서비스가 시작되었습니다!
 echo.
-echo [INFO] 🌐 접속 정보:
+echo [INFO] 접속 정보:
 echo    프론트엔드: http://localhost:3000
 echo    백엔드 API: http://localhost:8080
 echo    H2 콘솔: http://localhost:8080/h2-console
 echo.
-echo [INFO] 📊 H2 데이터베이스 정보:
+echo [INFO] H2 데이터베이스 정보:
 echo    JDBC URL: jdbc:h2:file:./hackathon
 echo    사용자: sa
 echo    비밀번호: (빈 값)
 echo.
-echo [WARNING] 🛑 서비스 중지하려면 Ctrl+C를 누르세요
+echo [WARNING] 서비스 중지하려면 Ctrl+C를 누르세요
 
 REM 프로세스 상태 모니터링
 :monitor_loop
@@ -192,14 +192,14 @@ timeout /t 5 /nobreak >nul
 REM 백엔드 프로세스 확인
 tasklist /FI "IMAGENAME eq java.exe" /FI "WINDOWTITLE eq *gradle*" >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] ❌ 백엔드 프로세스가 종료되었습니다.
+    echo [ERROR] 백엔드 프로세스가 종료되었습니다.
     goto :cleanup
 )
 
 REM 프론트엔드 프로세스 확인
 tasklist /FI "IMAGENAME eq node.exe" >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] ❌ 프론트엔드 프로세스가 종료되었습니다.
+    echo [ERROR] 프론트엔드 프로세스가 종료되었습니다.
     goto :cleanup
 )
 
@@ -208,7 +208,7 @@ goto :monitor_loop
 REM 종료 시 정리 함수
 :cleanup
 echo.
-echo [WARNING] 🛑 서비스 중지 중...
+echo [WARNING] 서비스 중지 중...
 
 REM 백엔드 프로세스 종료
 taskkill /F /IM java.exe /FI "WINDOWTITLE eq *gradle*" >nul 2>&1
@@ -230,6 +230,6 @@ for /f "tokens=5" %%i in ('netstat -ano ^| findstr :3000') do (
     taskkill /F /PID %%i >nul 2>&1
 )
 
-echo [SUCCESS] ✅ 모든 서비스가 정상적으로 종료되었습니다.
+echo [SUCCESS] 모든 서비스가 정상적으로 종료되었습니다.
 pause
 exit /b 0
